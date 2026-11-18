@@ -10,7 +10,7 @@ const pool = require('./pool');
      ('Администратор', 'admin@kruzhki.local', $1, '+77000000000', 'admin'),
      ('Анна Петрова', 'organizer@kruzhki.local', $2, '+77001112233', 'organizer'),
      ('Игорь Соколов', 'organizer2@kruzhki.local', $2, '+77004445566', 'organizer'),
-     ('Мария Иванова', 'user@kruzhki.local', $3, '+77009998877', 'participant')
+     ('Мария Иванова', 'user@kruzhki.local', $3, '+77009998877', 'parent')
      RETURNING id, email`,
     [hash('admin123'), hash('org12345'), hash('user1234')]
   );
@@ -37,8 +37,8 @@ const pool = require('./pool');
   let i = 0;
   for (const [org, title, desc, amin, amax, price, addr, cap, catName] of clubs) {
     const r = await pool.query(
-      `INSERT INTO clubs (organizer_id, category_id, title, description, age_min, age_max, price, address, capacity)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      `INSERT INTO clubs (organizer_id, category_id, title, description, age_min, age_max, price, address, capacity, moderation_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'approved') RETURNING id`,
       [org, cat(catName), title, desc, amin, amax, price, addr, cap]
     );
     const d1 = (i % 5) + 1;

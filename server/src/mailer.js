@@ -7,8 +7,8 @@ require('dotenv').config();
 const nodemailer = require('nodemailer');
 const pool = require('./db/pool');
 
-// Куда приходят уведомления о заявках (по умолчанию – почта владельца проекта)
-const OWNER = () => process.env.NOTIFY_EMAIL || process.env.MAIL_USER || 'tepmuhatop338@gmail.com';
+// Запасной адрес для организаторов с демо-почтой (.local). Задаётся только в .env, в коде адресов нет.
+const OWNER = () => process.env.NOTIFY_EMAIL || process.env.MAIL_USER || undefined;
 const CLIENT_URL = () => process.env.CLIENT_URL || 'http://localhost:5173';
 
 let transporter = null;
@@ -62,17 +62,11 @@ async function notifyNewRegistration(id) {
     if (to) {
       await send({
         to,
-        replyTo: realEmail(r.parent_email) ? r.parent_email : undefined,
-        subject: `К вам записались: ${r.participant_name} → ${r.club_title}`,
-        html: `<h2 style="margin:0 0 8px">🎯 Новая запись в ваш кружок «${esc(r.club_title)}»</h2>
-          <p style="margin:0 0 12px">Здравствуйте, ${esc(r.organizer_name)}! В ваш кружок записался участник.</p>
-          <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:15px">
-            ${row('Ребёнок', r.participant_name)}${row('Год рождения', r.participant_birth_year)}
-            ${row('Кружок', r.club_title)}
-            ${row('Родитель', r.parent_name)}${row('Email родителя', r.parent_email)}
-            ${row('Телефон', r.phone)}${row('Комментарий', r.comment)}
-          </table>
-          <p><a href="${CLIENT_URL()}/organizer/registrations">Открыть заявки и подтвердить или отклонить запись</a></p>`,
+        subject: `Новая заявка в кружок «${r.club_title}»`,
+        html: `<h2 style="margin:0 0 8px">🎯 Новая заявка в ваш кружок «${esc(r.club_title)}»</h2>
+          <p>Здравствуйте, ${esc(r.organizer_name)}! В кружок поступила новая заявка.</p>
+          <p>Персональные данные участников в письма не включаются: смотрите их в личном кабинете.</p>
+          <p><a href="${CLIENT_URL()}/organizer/registrations">Открыть заявки и ответить</a></p>`,
       });
     }
     if (realEmail(r.parent_email)) {
@@ -86,18 +80,24 @@ async function notifyNewRegistration(id) {
   } catch (e) { console.error('[почта] ошибка:', e.message); }
 }
 
-// Организатор или админ ответил на заявку: письмо родителю
+// Статус заявки изменился: письмо родителю
+const STATUS_TEXT = {
+  confirmed: ['Заявка подтверждена', 'подтверждена ✅'],
+  rejected: ['Заявка отклонена', 'отклонена'],
+  cancelled_by_system: ['Заявка отменена', 'отменена, потому что организатор кружка заблокирован'],
+  cancelled_by_organizer: ['Заявка отменена организатором', 'отменена организатором'],
+};
 async function notifyStatusChange(id) {
   try {
     const r = await load(id);
-    if (!r || !realEmail(r.parent_email)) return;
-    const ok = r.status === 'confirmed';
+    if (!r || !realEmail(r.parent_email) || !STATUS_TEXT[r.status]) return;
+    const [subj, text] = STATUS_TEXT[r.status];
     await send({
       to: r.parent_email, replyTo: realEmail(r.organizer_email) ? r.organizer_email : OWNER(),
-      subject: `${ok ? 'Заявка подтверждена' : 'Заявка отклонена'}: ${r.club_title}`,
+      subject: `${subj}: ${r.club_title}`,
       html: `<p>Здравствуйте, ${esc(r.parent_name)}!</p>
-        <p>Заявка на запись <b>${esc(r.participant_name)}</b> в кружок «${esc(r.club_title)}» <b>${ok ? 'подтверждена ✅' : 'отклонена'}</b>.</p>
-        ${ok && r.address ? `<p>Адрес: ${esc(r.address)}</p>` : ''}`,
+        <p>Заявка на запись <b>${esc(r.participant_name)}</b> в кружок «${esc(r.club_title)}» <b>${text}</b>.</p>
+        ${r.status === 'confirmed' && r.address ? `<p>Адрес: ${esc(r.address)}</p>` : ''}`,
     });
   } catch (e) { console.error('[почта] ошибка:', e.message); }
 }

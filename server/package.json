@@ -5,8 +5,10 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "check": "node src/check.js",
     "dev": "node --watch src/index.js",
     "db:init": "node src/db/init.js",
+    "db:reset": "node src/db/reset.js",
     "db:seed": "node src/db/seed.js",
     "test": "node test/api.test.js"
   },
@@ -17,6 +19,7 @@
     "express": "^4.19.2",
     "express-async-errors": "^3.1.1",
     "jsonwebtoken": "^9.0.2",
+    "node-pg-migrate": "^7.9.1",
     "nodemailer": "^6.9.14",
     "pg": "^8.12.0"
   }

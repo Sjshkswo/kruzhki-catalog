@@ -61,8 +61,8 @@ export default function ClubDetail() {
       <aside className="card">
         <h3>Записаться</h3>
         {!user && <p>Чтобы записаться, <Link to="/login">войдите</Link> или <Link to="/register">зарегистрируйтесь</Link>.</p>}
-        {user && user.role !== 'participant' && <p className="muted">Запись доступна только участникам.</p>}
-        {user?.role === 'participant' && (club.free_seats <= 0 ? <p className="bad">Свободных мест нет.</p> : (
+        {user && user.id === club.organizer_id && <p className="muted">Это ваш кружок: записываться в него нельзя.</p>}
+        {user && user.id !== club.organizer_id && (club.free_seats <= 0 ? <p className="bad">Свободных мест нет.</p> : (
           <form onSubmit={submit} className="form">
             <label>Имя участника<input name="participant_name" value={form.participant_name} onChange={change} required /></label>
             <label>Год рождения<input name="participant_birth_year" type="number" value={form.participant_birth_year} onChange={change} required /></label>

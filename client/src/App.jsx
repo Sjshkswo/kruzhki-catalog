@@ -37,7 +37,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Protected><Profile /></Protected>} />
-          <Route path="/my-registrations" element={<Protected roles={['participant']}><MyRegistrations /></Protected>} />
+          <Route path="/my-registrations" element={<Protected roles={['parent', 'organizer', 'admin']}><MyRegistrations /></Protected>} />
           <Route path="/organizer/clubs" element={<Protected roles={['organizer']}><OrganizerClubs /></Protected>} />
           <Route path="/organizer/clubs/new" element={<Protected roles={['organizer']}><ClubForm /></Protected>} />
           <Route path="/organizer/clubs/:id/edit" element={<Protected roles={['organizer']}><ClubForm /></Protected>} />
@@ -48,7 +48,7 @@ export default function App() {
       </main>
       <footer className="footer">
         <div className="footer-contacts">
-          <a href={`mailto:${CONTACT_EMAIL}`}>✉️ {CONTACT_EMAIL}</a>
+          {CONTACT_EMAIL && <a href={`mailto:${CONTACT_EMAIL}`}>✉️ {CONTACT_EMAIL}</a>}
           <a href={waLink()} target="_blank" rel="noopener noreferrer">💬 Написать в WhatsApp</a>
         </div>
         Каталог кружков и секций · дипломный проект
