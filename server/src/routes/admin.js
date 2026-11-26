@@ -42,6 +42,54 @@ router.patch('/users/:id/block', async (req, res) => {
   } finally { client.release(); }
 });
 
+
+// Администратор может создавать кружки напрямую. Такие кружки сразу одобрены.
+router.post('/clubs', async (req, res) => {
+  const b = req.body || {};
+  if (typeof b.title !== 'string' || b.title.trim().length < 3)
+    return res.status(400).json({ error: 'Название — минимум 3 символа' });
+  if (!Number.isInteger(Number(b.category_id)) || Number(b.category_id) <= 0)
+    return res.status(400).json({ error: 'Выберите категорию' });
+  const ageMin = Number(b.age_min), ageMax = Number(b.age_max);
+  const price = Number(b.price), capacity = Number(b.capacity);
+  if (!Number.isInteger(ageMin) || !Number.isInteger(ageMax) || ageMin < 0 || ageMax < ageMin)
+    return res.status(400).json({ error: 'Проверьте возрастные границы' });
+  if (!Number.isFinite(price) || price < 0)
+    return res.status(400).json({ error: 'Цена не может быть отрицательной' });
+  if (!Number.isInteger(capacity) || capacity <= 0)
+    return res.status(400).json({ error: 'Число мест должно быть больше нуля' });
+  const schedule = Array.isArray(b.schedule) ? b.schedule : [];
+  for (const s of schedule) {
+    if (!(Number(s.weekday) >= 1 && Number(s.weekday) <= 7) || !s.start_time || !s.end_time || s.end_time <= s.start_time)
+      return res.status(400).json({ error: 'Проверьте расписание: время окончания должно быть позже начала' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const created = await client.query(
+      `INSERT INTO clubs
+       (organizer_id, category_id, title, description, age_min, age_max, price, address, capacity, moderation_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'approved') RETURNING id`,
+      [req.user.id, Number(b.category_id), b.title.trim(), b.description || '', ageMin, ageMax, price, b.address || '', capacity]
+    );
+    const clubId = created.rows[0].id;
+    for (const s of schedule) {
+      await client.query(
+        'INSERT INTO schedules (club_id, weekday, start_time, end_time) VALUES ($1,$2,$3,$4)',
+        [clubId, Number(s.weekday), s.start_time, s.end_time]
+      );
+    }
+    await logAdmin(req.user.id, 'club_created', 'club', clubId, { title: b.title.trim() }, client);
+    await client.query('COMMIT');
+    res.status(201).json({ id: clubId, moderation_status: 'approved' });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    if (e.code === '23503') return res.status(400).json({ error: 'Выбранная категория не существует' });
+    throw e;
+  } finally { client.release(); }
+});
+
 router.get('/clubs', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT c.id, c.title, c.is_active, c.moderation_status, c.moderation_comment,

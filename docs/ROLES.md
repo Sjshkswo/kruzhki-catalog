@@ -16,7 +16,7 @@
 
 Эти три файла должен уметь объяснить **каждый** из команды, независимо от роли:
 
-1. `server/migrations/001_init.sql` и `002_moderation_roles_log.sql` — структура базы данных (миграции)
+1. `server/migrations/005_consolidated_schema.sql` — единая структура базы данных и безопасное обновление существующей схемы
 2. `server/src/middleware/auth.js` — проверка токена и роли
 3. `server/src/routes/registrations.js` — запись в кружок
 
