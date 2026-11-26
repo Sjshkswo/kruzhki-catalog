@@ -27,7 +27,7 @@ async function runChecks() {
     if (dbOk) {
       let migrated = false;
       try {
-        const r = await pool.query("SELECT 1 FROM pgmigrations WHERE name = '002_moderation_roles_log'");
+        const r = await pool.query("SELECT 1 FROM pgmigrations WHERE name = '005_consolidated_schema'");
         migrated = r.rowCount === 1;
       } catch (e) { /* таблицы миграций ещё нет */ }
       add(migrated, 'Миграции базы данных применены', 'В папке server выполните: npm run db:init');
