@@ -43,6 +43,7 @@ export default function App() {
           <Route path="/organizer/clubs/:id/edit" element={<Protected roles={['organizer']}><ClubForm /></Protected>} />
           <Route path="/organizer/registrations" element={<Protected roles={['organizer']}><OrganizerRegistrations /></Protected>} />
           <Route path="/admin" element={<Protected roles={['admin']}><Admin /></Protected>} />
+          <Route path="/admin/clubs/new" element={<Protected roles={['admin']}><ClubForm /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

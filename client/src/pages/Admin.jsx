@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, STATUS_LABELS, MOD_LABELS, ROLE_LABELS } from '../api.js';
+import { Link } from 'react-router-dom';
 
 export default function Admin() {
   const [tab, setTab] = useState('regs');
@@ -40,7 +41,7 @@ export default function Admin() {
 
   return (
     <>
-      <h1>Админ-панель</h1>
+      <div className="row-between"><h1>Админ-панель</h1><Link to="/admin/clubs/new" className="btn">+ Создать кружок</Link></div>
       <div className="tabs">
         {tabs.map(([k, label]) => <button key={k} className={tab === k ? 'tab active' : 'tab'} onClick={() => setTab(k)}>{label}</button>)}
       </div>
