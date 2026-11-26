@@ -1,11 +1,24 @@
-// Создаёт таблицы: npm run db:init
-const fs = require('fs');
+// Применяет миграции: npm run db:init
+// Безопасно: ничего не удаляет, можно запускать сколько угодно раз (в том числе на рабочей базе).
+require('dotenv').config();
 const path = require('path');
-const pool = require('./pool');
+const { default: runner } = require('node-pg-migrate');
 
-(async () => {
-  const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-  await pool.query(sql);
-  console.log('Таблицы созданы');
-  await pool.end();
-})().catch((e) => { console.error(e); process.exit(1); });
+async function migrate() {
+  await runner({
+    databaseUrl: process.env.DATABASE_URL,
+    dir: path.join(__dirname, '..', '..', 'migrations'),
+    direction: 'up',
+    migrationsTable: 'pgmigrations',
+    count: Infinity,
+    log: () => {},
+  });
+}
+
+module.exports = migrate;
+
+if (require.main === module) {
+  migrate()
+    .then(() => { console.log('Миграции применены'); process.exit(0); })
+    .catch((e) => { console.error(e.message); process.exit(1); });
+}
