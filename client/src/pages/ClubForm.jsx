@@ -42,6 +42,7 @@ export default function ClubForm() {
   return (
     <div className="card narrow wide">
       <h1>{id ? 'Редактирование кружка' : 'Новый кружок'}</h1>
+      <p className="muted">Новый кружок и изменения названия, описания или возраста проверяет администратор, и до одобрения в каталоге его не видно. Цену, расписание и места можно менять без проверки.</p>
       <form onSubmit={submit} className="form">
         <label>Название<input name="title" value={form.title} onChange={change} required /></label>
         <label>Категория
@@ -73,7 +74,7 @@ export default function ClubForm() {
         <button type="button" className="btn btn-light btn-small" onClick={addSlot}>+ Добавить занятие</button>
 
         {id && (
-          <label className="check"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> Показывать в каталоге</label>
+          <label className="check"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> Набор открыт</label>
         )}
         {error && <p className="error">{error}</p>}
         <button className="btn">Сохранить</button>

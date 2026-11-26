@@ -1,10 +1,13 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
 
+// R-4: в публичном каталоге только одобренные, открытые для набора кружки незаблокированных организаторов
+const PUBLIC_FILTER = "c.is_active = TRUE AND c.moderation_status = 'approved' AND u.is_blocked = FALSE";
+
 // Общий SELECT: кружок + категория + организатор + число свободных мест
 const CLUB_SELECT = `
   SELECT c.id, c.title, c.description, c.age_min, c.age_max, c.price, c.address, c.capacity,
-         c.is_active, c.category_id, cat.name AS category_name, u.full_name AS organizer_name,
+         c.is_active, c.moderation_status, c.moderation_comment, c.organizer_id, c.category_id, cat.name AS category_name, u.full_name AS organizer_name,
          u.phone AS organizer_phone, u.email AS organizer_email,
          c.capacity - (SELECT COUNT(*) FROM registrations r
                        WHERE r.club_id = c.id AND r.status IN ('pending','confirmed'))::int AS free_seats
@@ -19,7 +22,9 @@ router.get('/categories', async (req, res) => {
 
 router.get('/clubs', async (req, res) => {
   const { search, category, age, free } = req.query;
-  const where = ['c.is_active = TRUE'];
+  if ((category && !/^\d+$/.test(category)) || (age && !/^\d+$/.test(age)))
+    return res.status(400).json({ error: 'Фильтры category и age должны быть числами' });
+  const where = [PUBLIC_FILTER];
   const params = [];
   if (category) { params.push(Number(category)); where.push(`c.category_id = $${params.length}`); }
   if (age) { params.push(Number(age)); where.push(`c.age_min <= $${params.length} AND c.age_max >= $${params.length}`); }
@@ -32,7 +37,8 @@ router.get('/clubs', async (req, res) => {
 });
 
 router.get('/clubs/:id', async (req, res) => {
-  const { rows } = await pool.query(`${CLUB_SELECT} WHERE c.id = $1 AND c.is_active = TRUE`, [req.params.id]);
+  if (!/^\d+$/.test(req.params.id)) return res.status(404).json({ error: 'Кружок не найден' });
+  const { rows } = await pool.query(`${CLUB_SELECT} WHERE c.id = $1 AND ${PUBLIC_FILTER}`, [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Кружок не найден' });
   const sch = await pool.query(
     `SELECT id, weekday, to_char(start_time,'HH24:MI') AS start_time, to_char(end_time,'HH24:MI') AS end_time
@@ -42,3 +48,4 @@ router.get('/clubs/:id', async (req, res) => {
 
 module.exports = router;
 module.exports.CLUB_SELECT = CLUB_SELECT;
+module.exports.PUBLIC_FILTER = PUBLIC_FILTER;
