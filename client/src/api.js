@@ -12,12 +12,12 @@ export async function api(path, { method = 'GET', body } = {}) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
-    throw new Error('Нет связи с сервером. Проверьте, что сервер запущен (папка server, команда npm start).');
+    throw new Error('Нет связи с сервером. В папке server выполните npm start. Если он не запускается, выполните npm run check.');
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    if (data && data.error) throw new Error(data.error);
-    throw new Error('Сервер не отвечает. Запустите его: в папке server выполните npm start и не закрывайте терминал.');
+    if (data && data.error) throw new Error(data.details ? `${data.error} (${data.details})` : data.error);
+    throw new Error('Сервер не отвечает. В папке server выполните npm start и не закрывайте терминал. Если он не запускается, выполните npm run check: он подскажет причину.');
   }
   return data || {};
 }
@@ -44,9 +44,21 @@ export const bannerBg = (name) => {
 
 export const WEEKDAYS = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 export const STATUS_LABELS = {
+  waitlist: 'В очереди',
   pending: 'Ожидает',
   confirmed: 'Подтверждена',
   rejected: 'Отклонена',
+  removed: 'Выбыл',
+  expired: 'Истекла',
   cancelled: 'Отменена',
+  cancelled_by_organizer: 'Отменена организатором',
+  cancelled_by_system: 'Отменена системой',
 };
+export const MOD_LABELS = {
+  pending_review: 'На проверке',
+  approved: 'Одобрен',
+  rejected: 'Отклонён',
+  blocked: 'Заблокирован',
+};
+export const ROLE_LABELS = { parent: 'Родитель', organizer: 'Организатор', admin: 'Администратор' };
 export const formatPrice = (p) => (Number(p) === 0 ? 'Бесплатно' : `${Number(p).toLocaleString('ru-RU')} ₸/мес`);

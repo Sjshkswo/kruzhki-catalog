@@ -12,7 +12,7 @@ export default function Navbar() {
         <Link to="/" className="logo">🎯 <span>Кружки</span></Link>
         <nav>
           <NavLink to="/clubs">Каталог</NavLink>
-          {user?.role === 'participant' && <NavLink to="/my-registrations">Мои заявки</NavLink>}
+          {user && <NavLink to="/my-registrations">Мои заявки</NavLink>}
           {user?.role === 'organizer' && (
             <>
               <NavLink to="/organizer/clubs">Мои кружки</NavLink>

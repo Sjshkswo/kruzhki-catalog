@@ -5,7 +5,7 @@ import { useAuth } from '../AuthContext.jsx';
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ full_name: '', email: '', phone: '', password: '', role: 'participant' });
+  const [form, setForm] = useState({ full_name: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
   const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -24,12 +24,7 @@ export default function Register() {
         <label>Email<input name="email" type="email" value={form.email} onChange={change} required /></label>
         <label>Телефон<input name="phone" value={form.phone} onChange={change} /></label>
         <label>Пароль<input name="password" type="password" value={form.password} onChange={change} required /></label>
-        <label>Я
-          <select name="role" value={form.role} onChange={change}>
-            <option value="participant">Участник / родитель</option>
-            <option value="organizer">Организатор кружка</option>
-          </select>
-        </label>
+        <p className="muted">Вы регистрируетесь как родитель. Чтобы вести кружок, после регистрации подайте заявку организатора в профиле: её проверит администратор.</p>
         {error && <p className="error">{error}</p>}
         <button className="btn">Зарегистрироваться</button>
       </form>

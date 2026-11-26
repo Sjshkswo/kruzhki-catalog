@@ -3,6 +3,7 @@ const pool = require('../db/pool');
 const { auth, requireRole } = require('../middleware/auth');
 const { CLUB_SELECT } = require('./public');
 const { notifyStatusChange } = require('../mailer');
+const { serverError } = require('../utils/errors');
 
 router.use(auth, requireRole('organizer'));
 
@@ -37,6 +38,7 @@ router.get('/clubs', async (req, res) => {
 });
 
 router.get('/clubs/:id', async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(404).json({ error: 'Кружок не найден' });
   const { rows } = await pool.query(`${CLUB_SELECT} WHERE c.id = $1 AND c.organizer_id = $2`, [req.params.id, req.user.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Кружок не найден' });
   const sch = await pool.query(
@@ -62,38 +64,57 @@ router.post('/clubs', async (req, res) => {
     res.status(201).json({ id: rows[0].id });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error(e);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    serverError(res, e);
   } finally { client.release(); }
 });
 
 router.put('/clubs/:id', async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(404).json({ error: 'Кружок не найден' });
   const err = validateClub(req.body);
   if (err) return res.status(400).json({ error: err });
   const b = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const r = await client.query(
+    const cur = await client.query(
+      `SELECT title, description, age_min, age_max, moderation_status FROM clubs
+       WHERE id = $1 AND organizer_id = $2 FOR UPDATE`, [req.params.id, req.user.id]);
+    const old = cur.rows[0];
+    if (!old) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Кружок не найден' }); }
+
+    // R-6: нельзя уменьшить число мест ниже числа подтверждённых заявок
+    const conf = await client.query(
+      `SELECT COUNT(*)::int AS n FROM registrations WHERE club_id = $1 AND status = 'confirmed'`, [req.params.id]);
+    if (Number(b.capacity) < conf.rows[0].n) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Нельзя уменьшить число мест ниже числа подтверждённых заявок (${conf.rows[0].n})` });
+    }
+
+    // R-2/R-3: решение о публикации принимает только админ. Организатор не может менять moderation_status.
+    // Изменение названия, описания и возраста требует повторной проверки; заблокированный кружок остаётся заблокированным.
+    const critical = b.title.trim() !== old.title || (b.description || '') !== old.description
+      || Number(b.age_min) !== old.age_min || Number(b.age_max) !== old.age_max;
+    let moderation = old.moderation_status;
+    if (moderation === 'rejected' || (moderation === 'approved' && critical)) moderation = 'pending_review';
+
+    await client.query(
       `UPDATE clubs SET category_id=$1, title=$2, description=$3, age_min=$4, age_max=$5,
-              price=$6, address=$7, capacity=$8, is_active=COALESCE($9, is_active)
-       WHERE id=$10 AND organizer_id=$11 RETURNING id`,
+              price=$6, address=$7, capacity=$8, is_active=COALESCE($9, is_active), moderation_status=$10
+       WHERE id=$11`,
       [b.category_id, b.title.trim(), b.description || '', b.age_min, b.age_max, b.price, b.address || '',
-       b.capacity, typeof b.is_active === 'boolean' ? b.is_active : null, req.params.id, req.user.id]
-    );
-    if (!r.rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Кружок не найден' }); }
+       b.capacity, typeof b.is_active === 'boolean' ? b.is_active : null, moderation, req.params.id]);
     await saveSchedule(client, req.params.id, b.schedule);
     await client.query('COMMIT');
-    res.json({ ok: true });
+    res.json({ ok: true, moderation_status: moderation });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error(e);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    serverError(res, e);
   } finally { client.release(); }
 });
 
-// «Удаление» = скрытие кружка из каталога (заявки сохраняются)
+// «Удаление» = закрытие набора (is_active = false); заявки сохраняются. Решение о модерации здесь не меняется.
 router.delete('/clubs/:id', async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(404).json({ error: 'Кружок не найден' });
   const r = await pool.query('UPDATE clubs SET is_active = FALSE WHERE id=$1 AND organizer_id=$2 RETURNING id', [req.params.id, req.user.id]);
   if (!r.rows[0]) return res.status(404).json({ error: 'Кружок не найден' });
   res.json({ ok: true });
@@ -112,6 +133,7 @@ router.get('/registrations', async (req, res) => {
 });
 
 router.patch('/registrations/:id', async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(404).json({ error: 'Заявка не найдена или уже обработана' });
   const { status } = req.body;
   if (!['confirmed', 'rejected'].includes(status)) return res.status(400).json({ error: 'Допустимо: confirmed или rejected' });
   const r = await pool.query(

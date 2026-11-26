@@ -3,17 +3,18 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../db/pool');
 const { auth } = require('../middleware/auth');
+const { serverError } = require('../utils/errors');
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const sign = (u) => jwt.sign({ id: u.id, role: u.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 const publicUser = (u) => ({ id: u.id, full_name: u.full_name, email: u.email, phone: u.phone, role: u.role });
 
 router.post('/register', async (req, res) => {
-  const { full_name, email, password, phone, role } = req.body;
+  const { full_name, email, password, phone } = req.body;
   if (!full_name || full_name.trim().length < 2) return res.status(400).json({ error: 'Укажите ФИО' });
   if (!emailRe.test(email || '')) return res.status(400).json({ error: 'Неверный email' });
   if (!password || password.length < 6) return res.status(400).json({ error: 'Пароль — минимум 6 символов' });
-  const userRole = role === 'organizer' ? 'organizer' : 'participant'; // admin через форму получить нельзя
+  const userRole = 'parent'; // R-1: все регистрируются родителями; организатором становятся через заявку
   try {
     const { rows } = await pool.query(
       `INSERT INTO users (full_name, email, password_hash, phone, role)
@@ -23,8 +24,7 @@ router.post('/register', async (req, res) => {
     res.status(201).json({ token: sign(rows[0]), user: publicUser(rows[0]) });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Этот email уже зарегистрирован' });
-    console.error(e);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    serverError(res, e);
   }
 });
 
