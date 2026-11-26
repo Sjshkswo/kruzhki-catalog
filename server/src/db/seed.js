@@ -1,5 +1,11 @@
 
 // Заполняет базу демо-данными: npm run db:seed
+require('dotenv').config();
+
+if (process.env.NODE_ENV === 'production') {
+  console.error('seed нельзя запускать на рабочей базе');
+  process.exit(1);
+}
 
 const bcrypt = require('bcryptjs');
 const pool = require('./pool');
@@ -14,8 +20,6 @@ async function seed() {
 
     // Создание или обновление пользователей
     async function saveUser(fullName, email, password, phone, role) {
-      const passwordHash = hash(password);
-
       const result = await client.query(
         `SELECT id, email, phone
          FROM users
@@ -30,23 +34,12 @@ async function seed() {
       }
 
       if (result.rows.length === 1) {
-        const user = result.rows[0];
-
-        const updated = await client.query(
-          `UPDATE users
-           SET full_name = $1,
-               email = $2,
-               password_hash = $3,
-               phone = $4,
-               role = $5
-           WHERE id = $6
-           RETURNING id, email`,
-          [fullName, email, passwordHash, phone, role, user.id]
-        );
-
-        return updated.rows[0];
+        // Не перезаписываем существующий аккаунт: seed не должен менять
+        // роль, имя, телефон или пароль реального пользователя.
+        return result.rows[0];
       }
 
+      const passwordHash = hash(password);
       const inserted = await client.query(
         `INSERT INTO users
          (full_name, email, password_hash, phone, role)
@@ -88,6 +81,18 @@ async function seed() {
       'user1234',
       '+77009998877',
       'parent'
+    );
+
+    // Демо-профиль ребёнка: создаётся один раз и не дублируется при повторном seed.
+    await client.query(
+      `INSERT INTO children (parent_id, full_name, birth_date, gender, consent_at)
+       SELECT $1, 'Иванова Анастасия', DATE '2020-06-01', 'female', NOW()
+       WHERE NOT EXISTS (
+         SELECT 1 FROM children
+         WHERE parent_id = $1 AND LOWER(full_name) = LOWER('Иванова Анастасия')
+           AND birth_date = DATE '2020-06-01'
+       )`,
+      [parent.id]
     );
 
     // Создание или получение категорий
