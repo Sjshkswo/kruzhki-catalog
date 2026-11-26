@@ -8,12 +8,25 @@ const BASE = process.env.API || 'http://localhost:4000/api';
 async function call(method, path, body, token) {
   const res = await fetch(BASE + path, {
     method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   return { status: res.status, data: await res.json().catch(() => ({})) };
 }
+
 const login = async (email, password) => (await call('POST', '/auth/login', { email, password })).data.token;
+
+async function createChild(token, fullName, birthDate) {
+  return call('POST', '/children', {
+    full_name: fullName,
+    birth_date: birthDate,
+    gender: '',
+    consent: true,
+  }, token);
+}
 
 let passed = 0, failed = 0, n = 0;
 function check(name, ok, details = '') {
@@ -30,6 +43,19 @@ function check(name, ok, details = '') {
   const admin = await login('admin@kruzhki.local', 'admin123');
   if (!user || !org1 || !org2 || !admin) { console.log('Не удалось войти демо-пользователями. Выполните db:reset и db:seed.'); process.exit(1); }
   const Y = new Date().getFullYear();
+
+  // ---------- профили детей ----------
+  let childrenResult = await call('GET', '/children', null, user);
+  check('Seed создаёт демо-профиль ребёнка, GET /children его возвращает', childrenResult.status === 200 && childrenResult.data.some((x) => x.full_name === 'Иванова Анастасия'));
+  let childResult = await call('POST', '/children', { full_name: 'Тестовый ребёнок', birth_date: `${Y - 7}-05-10`, gender: 'male', consent: true }, user);
+  const createdChildId = childResult.data.id;
+  check('POST /children создаёт профиль только с согласием', childResult.status === 201 && !!createdChildId);
+  let organizerChildren = await call('GET', '/children', null, org1);
+  check('Организатор видит только собственные профили детей', organizerChildren.status === 200 && organizerChildren.data.length === 0);
+  let childEdit = await call('PUT', `/children/${createdChildId}`, { full_name: 'Тестовый ребёнок 2', birth_date: `${Y - 7}-05-10`, gender: 'male' }, user);
+  check('PUT /children/:id изменяет свой профиль', childEdit.status === 200 && childEdit.data.full_name === 'Тестовый ребёнок 2');
+  let childDelete = await call('DELETE', `/children/${createdChildId}`, null, user);
+  check('DELETE /children/:id удаляет профиль без активных заявок', childDelete.status === 200 && childDelete.data.ok === true);
 
   // ---------- каталог ----------
   let r = await call('GET', '/clubs');
@@ -51,7 +77,15 @@ function check(name, ok, details = '') {
   check('Неверный ввод: ?age=abc → 400, /clubs/abc → 404 (не 500)', a.status === 400 && b.status === 404, `${a.status}/${b.status}`);
 
   // ---------- запись ----------
-  const reg = { club_id: 8, participant_name: 'Саша', participant_birth_year: Y - 6, phone: '+77001234567' }; // кружок 8: 4–8 лет
+  const baseChildResult = await createChild(user, 'Саша', `${Y - 6}-06-01`);
+  const baseChildId = baseChildResult.data.id;
+  check('Профиль ребёнка создан через API и имеет id', baseChildResult.status === 201 && !!baseChildId);
+  const legacyRegistration = await call('POST', '/registrations', {
+    club_id: 8, participant_name: 'Старый формат', participant_birth_year: Y - 6, phone: '+77001234567',
+  }, user);
+  check('Старый формат с именем и годом больше не принимается', legacyRegistration.status === 400);
+
+  const reg = { club_id: 8, child_id: baseChildId, phone: '+77001234567' }; // кружок 8: 4–8 лет
   r = await call('POST', '/registrations', reg, user);
   const regId = r.data.id;
   check('Запись ребёнка: код 201, статус «ожидает»', r.status === 201 && r.data.status === 'pending');
@@ -59,11 +93,15 @@ function check(name, ok, details = '') {
   r = await call('POST', '/registrations', reg, user);
   check('Повторная заявка на того же ребёнка: код 409', r.status === 409);
 
-  r = await call('POST', '/registrations', { ...reg, club_id: 1, participant_birth_year: Y - 10 }, org1);
-  check('Организатор записывается в СВОЙ кружок: код 403 (R-18)', r.status === 403);
+  const organizerChild = await createChild(org1, 'Ребёнок организатора', `${Y - 14}-05-01`);
+  r = await call('POST', '/registrations', { club_id: 1, child_id: organizerChild.data.id, phone: '+77001234567' }, org1);
+  check('Организатор не может записать своего ребёнка в собственный кружок', r.status === 403);
 
-  r = await call('POST', '/registrations', { ...reg, club_id: 6, participant_birth_year: Y - 14 }, org1);
-  check('Организатор может записать ребёнка в ЧУЖОЙ кружок (R-18)', r.status === 201, `код ${r.status}`);
+  r = await call('POST', '/registrations', { club_id: 6, child_id: organizerChild.data.id, phone: '+77001234567' }, user);
+  check('Нельзя записать ребёнка из чужого профиля: код 404', r.status === 404);
+
+  r = await call('POST', '/registrations', { club_id: 6, child_id: organizerChild.data.id, phone: '+77001234567' }, org1);
+  check('Организатор может записать своего ребёнка в чужой кружок', r.status === 201, `код ${r.status}`);
 
   r = await call('PATCH', `/organizer/registrations/${regId}`, { status: 'confirmed' }, org1);
   check('Чужой организатор подтверждает заявку: код 404', r.status === 404);
@@ -77,14 +115,21 @@ function check(name, ok, details = '') {
   check('Отмена заявки и повторная запись после отмены', cancelOk && r.status === 201);
 
   const codes = [];
-  for (let i = 1; i <= 6; i++) codes.push((await call('POST', '/registrations', { ...reg, participant_name: `Ребёнок${i}` }, user)).status);
+  for (let i = 1; i <= 6; i++) {
+    const child = await createChild(user, `Ребёнок ${i}`, `${Y - 6}-07-${String(i).padStart(2, '0')}`);
+    codes.push(child.status === 201
+      ? (await call('POST', '/registrations', { ...reg, child_id: child.data.id }, user)).status
+      : child.status);
+  }
   check('Заявки сверх вместимости (6 мест): последняя отклонена, код 409', codes.slice(0, 4).every((c) => c === 201) && codes.includes(409), JSON.stringify(codes));
 
   // ---------- БЛ-1: возраст ----------
-  r = await call('POST', '/registrations', { club_id: 6, participant_name: 'Малыш', participant_birth_year: Y - 3, phone: '+77001234567' }, user);
+  const toddler = await createChild(user, 'Малыш', `${Y - 3}-01-01`);
+  r = await call('POST', '/registrations', { club_id: 6, child_id: toddler.data.id, phone: '+77001234567' }, user);
   check('БЛ-1: 3-летний в кружок 12–18 → код 400 с понятным сообщением', r.status === 400 && /12–18/.test(r.data.error || ''), JSON.stringify(r.data));
 
-  r = await call('POST', '/registrations', { club_id: 8, participant_name: 'Взрослый', participant_birth_year: Y - 40, phone: '+77001234567' }, user);
+  const adult = await createChild(user, 'Взрослый', `${Y - 40}-01-01`);
+  r = await call('POST', '/registrations', { club_id: 8, child_id: adult.data.id, phone: '+77001234567' }, user);
   check('БЛ-1: взрослый 40 лет в кружок 4–8 → код 400', r.status === 400);
 
   // ---------- БЛ-2: модерация организаторов и кружков ----------
@@ -100,7 +145,7 @@ function check(name, ok, details = '') {
   const cat = await call('GET', '/clubs'); const hidden = await call('GET', `/clubs/${newClubId}`);
   check('БЛ-2: неодобренный кружок не виден в каталоге и по прямой ссылке', cat.data.length === 8 && hidden.status === 404);
 
-  r = await call('POST', '/registrations', { club_id: newClubId, participant_name: 'Тест', participant_birth_year: Y - 8, phone: '+77001234567' }, user);
+  r = await call('POST', '/registrations', { club_id: newClubId, child_id: baseChildId, phone: '+77001234567' }, user);
   check('БЛ-2: в неодобренный кружок записаться нельзя: код 404', r.status === 404);
 
   r = await call('PATCH', `/admin/clubs/${newClubId}/moderation`, { status: 'approved' }, admin);
@@ -146,8 +191,10 @@ function check(name, ok, details = '') {
   check('R-2: смена цены повторной проверки не требует', edit2.data.moderation_status === 'approved');
 
   // ---------- R-6: места не ниже числа подтверждённых ----------
-  const pid = (await call('POST', '/registrations', { club_id: 1, participant_name: 'Дима', participant_birth_year: Y - 9, phone: '+77001234567' }, user)).data.id;
-  const pid2 = (await call('POST', '/registrations', { club_id: 1, participant_name: 'Аня', participant_birth_year: Y - 9, phone: '+77001234567' }, user)).data.id;
+  const dima = await createChild(user, 'Дима', `${Y - 9}-04-01`);
+  const anya = await createChild(user, 'Аня', `${Y - 9}-05-01`);
+  const pid = (await call('POST', '/registrations', { club_id: 1, child_id: dima.data.id, phone: '+77001234567' }, user)).data.id;
+  const pid2 = (await call('POST', '/registrations', { club_id: 1, child_id: anya.data.id, phone: '+77001234567' }, user)).data.id;
   await call('PATCH', `/organizer/registrations/${pid}`, { status: 'confirmed' }, org1);
   await call('PATCH', `/organizer/registrations/${pid2}`, { status: 'confirmed' }, org1);
   r = await call('PUT', '/organizer/clubs/1', { title: 'Школа футбола «Старт» (новое название)', category_id: 1, age_min: 7, age_max: 14, price: 500, capacity: 1, schedule: [] }, org1);
@@ -176,7 +223,7 @@ function check(name, ok, details = '') {
   r = await call('PATCH', '/admin/users/3/block', null, admin); // organizer2: кружки 5-8
   const after = await call('GET', '/clubs');
   const c6 = await call('GET', '/clubs/6');
-  const regBlocked = await call('POST', '/registrations', { club_id: 6, participant_name: 'Тимур', participant_birth_year: Y - 14, phone: '+77001234567' }, user);
+  const regBlocked = await call('POST', '/registrations', { club_id: 6, child_id: baseChildId, phone: '+77001234567' }, user);
   const allRegs = await call('GET', '/admin/registrations', null, admin);
   const systemCancelled = allRegs.data.filter((x) => x.club_id >= 5 && x.club_id <= 8 && x.status === 'cancelled_by_system').length;
   const stillActive = allRegs.data.filter((x) => x.club_id >= 5 && x.club_id <= 8 && ['pending', 'confirmed'].includes(x.status)).length;

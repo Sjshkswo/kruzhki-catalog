@@ -1,11 +1,20 @@
-// Проверка возраста по году рождения.
-// Точной даты рождения пока нет (появится вместе с профилями детей), поэтому
-// возраст в этом году может быть (год_сейчас − год_рождения) или на единицу меньше.
-// Ребёнок подходит, если хотя бы одно из двух значений попадает в диапазон кружка.
+// Проверка возраста по году рождения для старых заявок, в которых нет даты рождения.
 function ageFits(birthYear, ageMin, ageMax, nowYear = new Date().getFullYear()) {
   const older = nowYear - birthYear;
   const younger = older - 1;
   return (older >= ageMin && older <= ageMax) || (younger >= ageMin && younger <= ageMax);
 }
+
+// Точная проверка возраста на указанную дату (R-10).
+function ageAtDate(birthDate, referenceDate = new Date()) {
+  const birth = new Date(`${String(birthDate).slice(0, 10)}T00:00:00.000Z`);
+  const reference = new Date(referenceDate);
+  let age = reference.getUTCFullYear() - birth.getUTCFullYear();
+  const beforeBirthday = reference.getUTCMonth() < birth.getUTCMonth() ||
+    (reference.getUTCMonth() === birth.getUTCMonth() && reference.getUTCDate() < birth.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
 const approxAge = (birthYear, nowYear = new Date().getFullYear()) => nowYear - birthYear;
-module.exports = { ageFits, approxAge };
+module.exports = { ageFits, ageAtDate, approxAge };
