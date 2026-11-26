@@ -19,6 +19,7 @@ const {
   isValidIntegerId,
 } = require('../src/services/businessRules');
 const { normalizePhone } = require('../src/services/phone');
+const { ageAtDate } = require('../src/utils/age');
 
 const today = new Date(2026, 10, 17);
 
@@ -31,6 +32,11 @@ test('Невалидный телефон не принимается как л�
   assert.equal(normalizePhone('+01234567'), null);
   assert.equal(normalizePhone('+1abc2345678'), null);
   assert.equal(normalizePhone('+1234567890123456'), null);
+});
+
+test('R-10: точный возраст ребёнка учитывает день рождения', () => {
+  assert.equal(ageAtDate('2012-11-16', new Date('2026-11-17T00:00:00.000Z')), 14);
+  assert.equal(ageAtDate('2012-11-18', new Date('2026-11-17T00:00:00.000Z')), 13);
 });
 
 // R-10: Расчёт и проверка возраста
