@@ -13,6 +13,7 @@ export default function Navbar() {
         <nav>
           <NavLink to="/clubs">Каталог</NavLink>
           {user && <NavLink to="/my-registrations">Мои заявки</NavLink>}
+          {user && <NavLink to="/my-children">Мои дети</NavLink>}
           {user?.role === 'organizer' && (
             <>
               <NavLink to="/organizer/clubs">Мои кружки</NavLink>

@@ -10,6 +10,7 @@ import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Profile from './pages/Profile.jsx';
 import MyRegistrations from './pages/MyRegistrations.jsx';
+import MyChildren from './pages/MyChildren.jsx';
 import OrganizerClubs from './pages/OrganizerClubs.jsx';
 import ClubForm from './pages/ClubForm.jsx';
 import OrganizerRegistrations from './pages/OrganizerRegistrations.jsx';
@@ -38,12 +39,12 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Protected><Profile /></Protected>} />
           <Route path="/my-registrations" element={<Protected roles={['parent', 'organizer', 'admin']}><MyRegistrations /></Protected>} />
+          <Route path="/my-children" element={<Protected roles={['parent', 'organizer', 'admin']}><MyChildren /></Protected>} />
           <Route path="/organizer/clubs" element={<Protected roles={['organizer']}><OrganizerClubs /></Protected>} />
           <Route path="/organizer/clubs/new" element={<Protected roles={['organizer']}><ClubForm /></Protected>} />
           <Route path="/organizer/clubs/:id/edit" element={<Protected roles={['organizer']}><ClubForm /></Protected>} />
           <Route path="/organizer/registrations" element={<Protected roles={['organizer']}><OrganizerRegistrations /></Protected>} />
           <Route path="/admin" element={<Protected roles={['admin']}><Admin /></Protected>} />
-          <Route path="/admin/clubs/new" element={<Protected roles={['admin']}><ClubForm /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

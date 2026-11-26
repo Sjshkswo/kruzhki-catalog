@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, WEEKDAYS } from '../api.js';
-import { useAuth } from '../AuthContext.jsx';
 
 const empty = { title: '', category_id: '', description: '', age_min: 5, age_max: 12, price: 0, address: '', capacity: 10, is_active: true, schedule: [] };
 
 export default function ClubForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
   const [form, setForm] = useState(empty);
   const [cats, setCats] = useState([]);
   const [error, setError] = useState('');
@@ -37,16 +34,15 @@ export default function ClubForm() {
         schedule: form.schedule.map((s) => ({ ...s, weekday: Number(s.weekday) })),
       };
       if (id) await api(`/organizer/clubs/${id}`, { method: 'PUT', body });
-      else if (isAdmin) await api('/admin/clubs', { method: 'POST', body });
       else await api('/organizer/clubs', { method: 'POST', body });
-      navigate(isAdmin ? '/admin' : '/organizer/clubs');
+      navigate('/organizer/clubs');
     } catch (err) { setError(err.message); }
   };
 
   return (
     <div className="card narrow wide">
-      <h1>{id ? 'Редактирование кружка' : isAdmin ? 'Создание кружка от имени администратора' : 'Новый кружок'}</h1>
-      <p className="muted">{isAdmin ? 'Кружок будет создан и сразу опубликован в каталоге.' : 'Новый кружок и изменения названия, описания или возраста проверяет администратор, и до одобрения в каталоге его не видно. Цену, расписание и места можно менять без проверки.'}</p>
+      <h1>{id ? 'Редактирование кружка' : 'Новый кружок'}</h1>
+      <p className="muted">Новый кружок и изменения названия, описания или возраста проверяет администратор, и до одобрения в каталоге его не видно. Цену, расписание и места можно менять без проверки.</p>
       <form onSubmit={submit} className="form">
         <label>Название<input name="title" value={form.title} onChange={change} required /></label>
         <label>Категория
